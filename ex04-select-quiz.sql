@@ -23,5 +23,6 @@ WHERE salary >=5000;
 --    근무 시작일(hire_date)을 조회
 
 SELECT hire_date,first_name
+
 FROM employees
 WHERE hire_date>= '05/01/01';
