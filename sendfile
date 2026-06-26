@@ -1,157 +1,482 @@
-package com.moa.backend.welfare.service;
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import styles from './WelfareDetail.module.css'
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+const BADGE_CLASS = {
+  '주거':           styles.badgeBlue,
+  '일자리':         styles.badgeAmber,
+  '생활':           styles.badgePink,
+  '교육':           styles.badgeBlue,
+  '금융':           styles.badgeGreen,
+  '참여･기반':      styles.badgeGray,
+  '금융･복지･문화': styles.badgeGreen,
+}
 
-import org.springframework.stereotype.Service;
+const WelfareDetail = () => {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [w, setW] = useState(null)
+  const [wished, setWished] = useState(false)
+  const [related, setRelated] = useState([])
+  const token = localStorage.getItem('token')
 
-import com.moa.backend.common.util.page.PageResponse;
-import com.moa.backend.common.util.page.Pagination;
-import com.moa.backend.welfare.model.mapper.WelfareMapper;
-import com.moa.backend.welfare.model.vo.WelfareCategoryDTO;
-import com.moa.backend.welfare.model.vo.WelfareDetailDTO;
-import com.moa.backend.welfare.model.vo.WelfareListDTO;
-import com.moa.backend.welfare.model.vo.WelfareRegionDTO;
-import com.moa.backend.welfare.model.vo.WelfareSearchDTO;
+  useEffect(() => {
+    fetch(`http://localhost:8080/api/welfare/detail/${id}`)
+      .then(res => res.json())
+      .then(data => {
+        setW(data)
+        return fetch(`http://localhost:8080/api/welfare/related?lclsfNm=${encodeURIComponent(data.lclsfNm)}&excludeId=${id}`)
+      })
+      .then(res => res.json())
+      .then(data => setRelated(data))
 
-import lombok.RequiredArgsConstructor;
-
-@Service
-@RequiredArgsConstructor
-public class WelfareService {
-
-    private final WelfareMapper mapper;
-
-    private static final Map<String, String[]> PERSONA_CATEGORY_MAP = Map.of(
-        "대학생", new String[]{"교육", "금융･복지･문화"},
-        "취준생", new String[]{"일자리", "참여･기반"},
-        "사회초년생", new String[]{"주거", "금융･복지･문화"}
-    );
-
-    private static final List<String> ALL_CATEGORIES =
-        List.of("주거", "일자리", "교육", "참여･기반", "금융･복지･문화");
-
-    // ===== 복지 리스트/검색 =====
-
-    public List<WelfareListDTO> getMainWelfare() {
-        return mapper.getMainWelfare();
+    if (token) {
+      fetch(`http://localhost:8080/api/wish/check/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setWished(data))
     }
+  }, [id])
 
-    public List<WelfareListDTO> getTopten() {
-        return mapper.getTopten();
-    }
+  const decodeHtml = (text) => {
+    if (!text) return text
+    const txt = document.createElement('textarea')
+    txt.innerHTML = text
+    let result = txt.value
+    txt.innerHTML = result
+    return txt.value
+  }
 
-    public WelfareDetailDTO getWelfareDetail(Long id) {
-        return mapper.getWelfareDetail(id);
-    }
+  const toggleWish = async () => {
+  if (!token) {
+    alert('로그인이 필요합니다.')
+    navigate('/login')
+    return
+  }
+  const method = wished ? 'DELETE' : 'POST'
+  await fetch(`http://localhost:8080/api/wish/${id}`, {
+    method,
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  setWished(prev => !prev)
+  setW(prev => ({ ...prev, wishCount: wished ? prev.wishCount - 1 : prev.wishCount + 1 }))
+ } 
 
-    public List<WelfareListDTO> getRelatedWelfare(String lclsfNm, Long excludeId) {
-        return mapper.getRelatedWelfare(lclsfNm, excludeId);
-    }
+  if (!w) return <div>로딩 중...</div>
 
-    public PageResponse<WelfareListDTO> getWelfareList(String keyword, List<String> lclsfNm, List<String> region,
-            int ageMin, int ageMax, List<String> income, List<String> job, List<String> school, String sort, int page) {
-        int limit = 14;
-        WelfareSearchDTO params = new WelfareSearchDTO();
-        params.setKeyword(keyword);
-        params.setLclsfNm(lclsfNm);
-        params.setRegion(region);
-        params.setAgeMin(ageMin);
-        params.setAgeMax(ageMax);
-        params.setIncome(income);
-        params.setJob(job);
-        params.setSchool(school);
-        params.setSort(sort);
-        params.setPage(page);
-        params.setLimit(limit);
-        int totalItems = mapper.getWelfareCount(params);
-        Pagination pagination = new Pagination(params, totalItems);
-        List<WelfareListDTO> list = mapper.getWelfareList(params);
-        return new PageResponse<>(list, pagination);
-    }
+  return (
+    <div className={styles.pageBg}>
+      <div className={styles.detailWrap}>
+        <div className={styles.dcard}>
+          <button className={styles.btnBack} onClick={() => navigate('/welfarelist')}>←</button>
+          <div className={styles.detailBadgeRow}>
+            <span className={`${styles.badge} ${BADGE_CLASS[w.lclsfNm] || styles.badgeGray}`}>{w.lclsfNm}</span>
+          </div>
+          <div className={styles.detailTitle}>{w.plcyNm}</div>
+          <div className={styles.detailOrg}>{w.sprvsnInstCdNm} · 최종 업데이트 {w.lastMdfcnDt}</div>
+          <table className={styles.infoTable}>
+            <tbody>
+              <tr><td>지원대상</td><td>만 {w.sprtTrgtMinAge}세 ~ {w.sprtTrgtMaxAge}세</td></tr>
+              <tr><td>지원제한대상</td><td>{decodeHtml(w.ptcpPrpTrgtCn) || '-'}</td></tr>
+              <tr><td>소득기준</td><td>{decodeHtml(w.earnEtcCn) || '-'}</td></tr>
+              <tr><td>정책지원내용</td><td>{decodeHtml(w.plcySprtCn) || '-'}</td></tr>
+              <tr><td>신청기간</td><td>{decodeHtml(w.aplyYmd) || '상시'}</td></tr>
+              <tr><td>신청방법</td><td>{decodeHtml(w.plcyAplyMthdCn) || '-'}</td></tr>
+            </tbody>
+          </table>
+           {w.aplyUrlAddr ? (
+              <>
+                <div className={styles.btnRow}>
+                  <button className={`${styles.btnHeart} ${wished ? styles.on : ''}`} onClick={toggleWish}>
+                    {wished ? '♥ 찜 해제' : '♡ 찜하기'}
+                  </button>
+                  <button className={styles.btnApply} onClick={() => window.open(w.aplyUrlAddr, '_blank')}>
+                    신청하러 가기 →
+                  </button>
+                </div>
+                <div className={styles.wishCount}>총 <span>{w.wishCount}</span>명이 찜했어요</div>
+              </>
+            ) : (
+              <div className={styles.heartOnlyBox}>
+                <button className={`${styles.btnHeart} ${wished ? styles.on : ''}`} onClick={toggleWish}>
+                  {wished ? '♥ 찜 해제' : '♡ 찜하기'}
+                </button>
+                <div className={styles.wishCountInline}>총 <span>{w.wishCount}</span>명이 찜했어요</div>
+              </div>
+            )}
+        </div>
 
-    // ===== 메인화면 추천 =====
+        <div className={styles.dcard}>
+          <div className={styles.detailSecTitle}>지원 내용</div>
+          <div className={styles.detailContent}>{decodeHtml(w.plcyExplnCn) || '-'}</div>
+        </div>
 
-    public List<WelfareListDTO> getRecommend(Long memberId, String region, String jobStatus, int incomeLevel) {
-        Map<String, Object> params = new HashMap<>();
+        <div className={styles.dcard}>
+          <div className={styles.detailSecTitle}>심사 방법</div>
+          <div className={styles.detailContent}>
+            {w.srngMthdCn
+              ? decodeHtml(w.srngMthdCn).split('\n').map((line, i) => <span key={i}>{line}<br /></span>)
+              : '-'
+            }
+          </div>
+        </div>
 
-        boolean hasWish = memberId != null && mapper.countWish(memberId) > 0;
-        params.put("memberId", memberId);
-        params.put("hasWish", hasWish);
-        params.put("region", resolveRegionCode(region));
-        params.putAll(resolveJobStatusParams(jobStatus));
-        params.put("earnCndSeCd", resolveEarnCode(incomeLevel));
+        <div className={styles.dcard}>
+          <div className={styles.secHd}>
+            <span className={styles.secTitle}>관련 복지 추천</span>
+            <span className={styles.relSub}>같은 카테고리 · {w.lclsfNm}</span>
+          </div>
+          <div className={styles.relGrid}>
+            {related.map(r => (
+              <div key={r.welfareId} className={styles.wcard} onClick={() => { window.scrollTo(0, 0); navigate(`/welfaredetail/${r.welfareId}`) }}>
+                <div className={styles.wcardTitle}>{r.plcyNm}</div>
+                <div className={styles.wcardMeta}>
+                  <span>{r.sprvsnInstCdNm}</span>
+                  <span>신청: {r.aplyYmd || '상시'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-        return mapper.getRecommend(params);
-    }
+      </div>
+    </div>
+  )
+}
 
-    // ===== 페르소나 =====
+export default WelfareDetail
+===
 
-    public Map<String, List<WelfareListDTO>> getPersonaByCode(String jobStatus) {
-        String[] categories = PERSONA_CATEGORY_MAP.get(jobStatus);
-        if (categories == null) return new LinkedHashMap<>();
 
-        Map<String, Object> baseParams = resolveJobStatusParams(jobStatus);
-        return buildPersonaResult(categories, baseParams, "getPersonaByCode");
-    }
+.pageBg {
+  background: #F4F7FB;
+  min-height: calc(100vh - 60px);
+  padding-top: 60px;
+}
 
-    public Map<String, List<WelfareListDTO>> getPersonaByDetail(String jobStatus, String region) {
-        Map<String, Object> baseParams = resolveJobStatusParams(jobStatus);
-        baseParams.put("region", resolveRegionCode(region));
+.loadingWrap {
+  padding: 40px;
+  text-align: center;
+  font-size: 14px;
+  color: #6C757D;
+}
 
-        String[] categories = ALL_CATEGORIES.toArray(new String[0]);
-        return buildPersonaResult(categories, baseParams, "getPersonaByDetail");
-    }
+.errorMsg {
+  margin: 20px;
+  font-size: 13px;
+  color: #E24B4A;
+  padding: 12px;
+  background: #FCEBEB;
+  border-radius: 8px;
+}
 
-    private Map<String, List<WelfareListDTO>> buildPersonaResult(String[] categories, Map<String, Object> baseParams, String queryId) {
-        Map<String, List<WelfareListDTO>> result = new LinkedHashMap<>();
-        for (String category : categories) {
-            Map<String, Object> params = new HashMap<>(baseParams);
-            params.put("lclsfNm", category);
-            List<WelfareListDTO> items = "getPersonaByCode".equals(queryId)
-                ? mapper.getPersonaByCode(params)
-                : mapper.getPersonaByDetail(params);
-            result.put(category, items);
-        }
-        return result;
-    }
+/* 브레드크럼 */
+.breadcrumb {
+  font-size: 12px;
+  color: #ADB5BD;
+  padding: 10px 20px;
+  background: #fff;
+  border-bottom: 1px solid #E9ECEF;
+}
 
-    // ===== 코드 사전 조회 =====
+.breadcrumb span {
+  cursor: pointer;
+  color: #378ADD;
+  transition: color 0.15s;
+}
 
-    public List<WelfareRegionDTO> getRegionList() {
-        return mapper.getRegionList();
-    }
+.breadcrumb span:hover { text-decoration: underline; }
 
-    public List<WelfareCategoryDTO> getCategoryList() {
-        return mapper.getCategoryList();
-    }
+.breadCurrent {
+  color: #ADB5BD !important;
+  cursor: default !important;
+}
 
-    // ===== 공통 변환 헬퍼 =====
+.breadCurrent:hover { text-decoration: none !important; }
 
-    private String resolveRegionCode(String region) {
-        return region != null ? mapper.getRegionCode(region) : null;
-    }
+/* 상세 래퍼 */
+.detailWrap {
+  padding: 20px;
+  max-width: 860px;
+  margin: 0 auto;
+}
 
-    private Map<String, Object> resolveJobStatusParams(String jobStatus) {
-        Map<String, Object> params = new HashMap<>();
-        if ("대학생".equals(jobStatus)) {
-            params.put("schoolCd", "0049005");
-        } else if ("취준생".equals(jobStatus)) {
-            params.put("jobCd", "0013003");
-        } else if ("사회초년생".equals(jobStatus)) {
-            params.put("jobCd", "0013001");
-        }
-        return params;
-    }
+/* 카드 공통 */
+.dcard {
+  background: #fff;
+  border: 1px solid #DEE2E6;
+  border-radius: 14px;
+  padding: 22px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 16px rgba(55,138,221,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  position: relative;
+}
 
-    private String resolveEarnCode(int incomeLevel) {
-        return switch (incomeLevel) {
-            case 0 -> "0043001";
-            case 1 -> "0043002";
-            case 2 -> "0043003";
-            default -> null;
-        };
-    }
+/* 뱃지 */
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  display: inline-block;
+  font-weight: 500;
+}
+
+.badgeBlue  { background: #E6F1FB; color: #0C447C; }
+.badgeGreen { background: #E1F5EE; color: #0F6E56; }
+.badgeAmber { background: #FAEEDA; color: #633806; }
+.badgePink  { background: #FBEAF0; color: #72243E; }
+.badgeGray  { background: #F1F3F5; color: #6C757D; }
+
+.detailBadgeRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.detailTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1A1D23;
+  margin-bottom: 5px;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+}
+
+.detailOrg {
+  font-size: 12px;
+  color: #ADB5BD;
+  margin-bottom: 18px;
+}
+
+/* 정보 테이블 */
+.infoTable {
+  width: 100%;
+  border: 1px solid #DEE2E6;
+  border-radius: 10px;
+  overflow: hidden;
+  border-collapse: collapse;
+}
+
+.infoTable tr { border-bottom: 1px solid #F1F3F5; }
+.infoTable tr:last-child { border-bottom: none; }
+
+.infoTable td {
+  padding: 9px 14px;
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.infoTable td:first-child {
+  width: 90px;
+  font-weight: 600;
+  color: #6C757D;
+  background: #F8F9FA;
+  border-right: 1px solid #F1F3F5;
+  white-space: nowrap;
+}
+
+.infoTable td:last-child {
+  color: #1A1D23;
+  white-space: pre-line;
+}
+
+/* 버튼 */
+.btnRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btnHeart {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 18px;
+  height: 42px;
+  border: 1px solid #DEE2E6;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #fff;
+  color: #6C757D;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.btnHeart:hover { border-color: #ADB5BD; }
+.btnHeart.on { color: #D4537E; border-color: #ED93B1; background: #FBEAF0; }
+
+.btnApply {
+  flex: 1;
+  height: 42px;
+  background: #378ADD;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.btnApply:hover { background: #185FA5; }
+
+/* 섹션 타이틀 */
+.detailSecTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1D23;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #E9ECEF;
+}
+
+.detailContent {
+  font-size: 13px;
+  color: #6C757D;
+  line-height: 1.9;
+  white-space: pre-line;
+}
+
+/* 관련 복지 */
+.secHd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.secTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1D23;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.relSub { font-size: 11px; color: #ADB5BD; }
+
+.relGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.wcard {
+  background: #fff;
+  border: 1px solid #DEE2E6;
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+}
+
+.wcard:hover {
+  border-color: #85B7EB;
+  box-shadow: 0 2px 16px rgba(55,138,221,0.08);
+  transform: translateY(-1px);
+}
+
+.wcardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.wcardTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1A1D23;
+  margin-bottom: 5px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.wcardMeta {
+  font-size: 11px;
+  color: #6C757D;
+  line-height: 1.7;
+}
+
+.wcardMeta span { display: block; }
+
+.heartBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: #ADB5BD;
+  padding: 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.heartBtn:hover { color: #D4537E; }
+.heartBtn.on    { color: #D4537E; }
+
+.btnBack {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  background: none;
+  border: 1px solid #DEE2E6;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  cursor: pointer;
+  color: #378ADD;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.btnBack:hover {
+  background: #F8F9FA;
+  border-color: #ADB5BD;
+}
+
+.wishCount {
+  font-size: 12px;
+  color: #ADB5BD;
+  margin-top: 6px;
+}
+
+.wishCount span {
+  color: #D4537E;
+  font-weight: 500;
+}
+
+.btnRowRight {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.wishCountInline {
+  font-size: 12px;
+  color: #ADB5BD;
+}
+
+.wishCountInline span {
+  color: #D4537E;
+  font-weight: 500;
+}
+
+.heartOnlyBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
