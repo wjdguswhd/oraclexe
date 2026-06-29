@@ -1,5 +1,10 @@
-SELECT WELFARE_ID, JSON_VALUE(FULL_DATA, '$.plcyNm'), 
-       JSON_VALUE(FULL_DATA, '$.sprtTrgtMinAge'), JSON_VALUE(FULL_DATA, '$.sprtTrgtMaxAge')
-FROM WELFARE
-WHERE SPRT_TRGT_MIN_AGE = 0 AND SPRT_TRGT_MAX_AGE = 0
-FETCH FIRST 10 ROWS ONLY;
+8	삼척형 일자리 안심공제	0	0
+9	대학생 아르바이트 운영	0	0
+5	전세보증금반환보증 보증료 지원	0	0
+22	부산 청년문화축제(부산 스텝업댄스페스티벌)	0	0
+94	2026 충남 창업마루 나비(Starup-NAvi)	0	0
+87	다문화청년 취᭼창업지원 사업	0	0
+88	SW중심대학 지원	0	0
+91	창의융합형 공학인재양성지원	0	0
+93	생활권 보행환경 종합정비사업 (안서동 청년안심 탄소중립 보행환경 개선)	0	0
+110	인재육성사업 추진	0	0
