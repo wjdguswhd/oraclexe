@@ -1,7 +1,2 @@
--- 옛 방식 (getRecommend가 쓰는 방식)
-SELECT COUNT(*) FROM WELFARE w
-WHERE JSON_VALUE(w.FULL_DATA, '$.zipCd') LIKE '28%';
-
--- 새 방식 (WelfareList가 쓰는 방식)
 SELECT COUNT(*) FROM WELFARE w
 WHERE REGEXP_LIKE(JSON_VALUE(w.FULL_DATA, '$.zipCd'), '(^|,)28[0-9]{3}(,|$)');
