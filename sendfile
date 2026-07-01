@@ -1,13 +1,33 @@
-SELECT 
-    CASE WHEN JSON_VALUE(FULL_DATA, '$.aplyYmd') IS NULL THEN '상시(NULL)'
-         WHEN TO_DATE(TRIM(REGEXP_SUBSTR(JSON_VALUE(FULL_DATA, '$.aplyYmd'), '[0-9]{8}$')), 'YYYYMMDD') >= SYSDATE THEN '날짜형(살아있음)'
-         ELSE '마감'
-    END AS status,
-    COUNT(*)
-FROM WELFARE
-WHERE LCLSF_NM LIKE '%금융･복지･문화%'
-GROUP BY 
-    CASE WHEN JSON_VALUE(FULL_DATA, '$.aplyYmd') IS NULL THEN '상시(NULL)'
-         WHEN TO_DATE(TRIM(REGEXP_SUBSTR(JSON_VALUE(FULL_DATA, '$.aplyYmd'), '[0-9]{8}$')), 'YYYYMMDD') >= SYSDATE THEN '날짜형(살아있음)'
-         ELSE '마감'
-    END;
+<if test="school != null and school.size() > 0">
+			    AND (
+			        <foreach collection="school" item="s" separator=" OR ">
+			            w.SCHOOL_CD LIKE '%' || #{s} || '%'
+			        </foreach>
+			    )
+			</if>
+		    <if test="sort == '진행중'">
+		        AND (
+		            JSON_VALUE(w.FULL_DATA, '$.aplyYmd') IS NULL
+		            OR NOT REGEXP_LIKE(JSON_VALUE(w.FULL_DATA, '$.aplyYmd'), '~')
+		            OR TO_DATE(TRIM(REGEXP_SUBSTR(JSON_VALUE(w.FULL_DATA, '$.aplyYmd'), '[0-9]{8}$')), 'YYYYMMDD') &gt;= SYSDATE
+		        )
+		    </if>
+		    <if test="sort == '마감됨'">
+		        AND JSON_VALUE(w.FULL_DATA, '$.aplyYmd') IS NOT NULL
+		        AND REGEXP_LIKE(JSON_VALUE(w.FULL_DATA, '$.aplyYmd'), '~')
+		        AND TO_DATE(TRIM(REGEXP_SUBSTR(JSON_VALUE(w.FULL_DATA, '$.aplyYmd'), '[0-9]{8}$')), 'YYYYMMDD') &lt; SYSDATE
+		    </if>
+		    GROUP BY w.WELFARE_ID, w.LCLSF_NM,
+		        JSON_VALUE(w.FULL_DATA, '$.plcyNm'),
+		        JSON_VALUE(w.FULL_DATA, '$.aplyYmd'),
+		        JSON_VALUE(w.FULL_DATA, '$.sprvsnInstCdNm')
+		    <choose>
+		        <when test="sort == '찜 많은순'">
+		            ORDER BY wishCount DESC, w.WELFARE_ID DESC
+		        </when>
+		        <otherwise>
+		            ORDER BY w.WELFARE_ID DESC
+		        </otherwise>
+		    </choose>
+		    OFFSET #{offset} ROWS
+		    FETCH NEXT #{limit} ROWS ONLY
